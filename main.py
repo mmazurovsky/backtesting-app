@@ -96,12 +96,13 @@ class RsiStrategy(bt.Strategy):
         if len(data_daily_close) >= self.params.rsi_period:
             # Collect the last few closing prices for RSI calculation
             closes = data_daily_close.get(size=self.params.rsi_period)
-            closes.append(data_minute_close[0])  # Add the current close of minute data
+            # closes.append(data_minute_close[0])  # Add the current close of minute data
             prices = pd.Series(closes)
 
             # Calculate RSI using the `ta` library
-            rsi = ta.momentum.RSIIndicator(prices, window=self.params.rsi_period).rsi().iloc[-1]
-            return rsi
+            rsi = ta.momentum.RSIIndicator(prices, window=self.params.rsi_period).rsi()
+
+            return rsi.iloc[-1]
         return None
 
     def next(self):

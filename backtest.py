@@ -27,7 +27,7 @@ def run_backtest(asset: str, data: pd.DataFrame, strategy_class):
     resampled_feed = bt.feeds.PandasData(
         dataname=data_df_resampled,
     )
-    cerebro.adddata(data_feed, name="daily_tf")
+    cerebro.adddata(resampled_feed, name="daily_tf")
 
 
     # Set initial cash
