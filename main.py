@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import backtrader as bt
 import pandas as pd
@@ -7,31 +7,9 @@ import numpy as np
 import ta
 from typing import List, Dict
 
-import calculations
 from backtest import run_backtest
 from data import OhlcRequest
 from repo import MongoConnector
-
-
-# class RSIOverboughtStrategy(bt.Strategy):
-#
-#     def __init__(self):
-#         self.rsi_period: int = 5
-#         self.rsi_threshold: int = 70
-#
-#     def next(self):
-#         if self.position:
-#             asset_with_position = self.position.data
-#
-#             if data.rsi[0] < self.params.rsi_threshold:
-#                 # Sell all holdings
-#                 self.sell(size=self.position.size)
-#         else:
-#             for data in self.datas:
-#                 if data.rsi[0] > self.params.rsi_threshold:
-#                     # Buy with all available balance
-#                     size = self.broker.get_cash() / data.close[0]
-#                     self.buy(size=size, data=data)
 
 
 class BuyAndHold(bt.Strategy):
@@ -54,67 +32,93 @@ class BuyAndHold(bt.Strategy):
             self.initialized = True
 
 
+import backtrader as bt
+from datetime import datetime, timedelta
+
+
+# class RsiStrategy(bt.Strategy):
+#     params = (
+#         ('rsi_threshold', 70),  # RSI threshold for buy/sell
+#         ('rsi_period', 5),  # RSI calculation period in days
+#     )
+#
+#     def __init__(self):
+#         self.order = None  # Track pending orders
+#
+#     def calculate_rsi(self):
+#         """
+#         Calculate the RSI based on the last 4 days' close prices.
+#         """
+#         # Get the close prices for the last rsi_period days
+#
+#         prev_closes = self.getdatabyname("daily_tf").close
+#         if len(prev_closes) >= self.params.rsi_period:
+#             closes: list = prev_closes.get(size=4)
+#             closes.append(self.getdatabyname("minute_tf").close[0])
+#             prices = pd.Series(closes)
+#             rsi_value = ta.wrapper.RSIIndicator(prices, window=self.params.rsi_period).rsi().values[-1]
+#             return rsi_value
+#         else:
+#             return
+
+# def next(self):
+#     # Calculate RSI value
+#     rsi_value = self.calculate_rsi()
+#
+#     # Buy condition: RSI > threshold
+#     if not rsi_value is None:
+#         if rsi_value > self.params.rsi_threshold and not self.position:
+#             size = int(self.broker.getcash() / self.datas[0].close[0])
+#             if size > 0:
+#                 self.order = self.buy(size=size)
+#         # Sell condition: RSI < threshold
+#         elif rsi_value < self.params.rsi_threshold and self.position:
+#             self.order = self.sell(size=self.position.size)
+
 
 class RsiStrategy(bt.Strategy):
     params = (
-        ('rsi_threshold', 70),  # RSI threshold for buy/sell
-        ('rsi_period', 5),     # RSI calculation period
+        ('rsi_threshold', 70),
+        ('rsi_period', 5),
     )
 
     def __init__(self):
-        self.order = None  # Track pending orders
+        self.order = None
+        # Access data feeds by name
+        self.data_minute = self.getdatabyname("minute_tf")
+        self.data_daily = self.getdatabyname("daily_tf")
 
-    def calculate_rsi_n_days(self, data, n: int):
-        """
-        Calculate the RSI based on the latest close and the last N days' open prices.
-        """
-        # Create a DataFrame from the data feed
-        data_length = len(data)
-        df = pd.DataFrame(
-            {
-                'datetime': [data.num2date(i) for i in range(-data_length + 1, 1)],
-                'close': [data.close[i] for i in range(-data_length + 1, 1)],
-                'open': [data.open[i] for i in range(-data_length + 1, 1)],
-            }
-        )
-        df.set_index('datetime', inplace=True)
+    def __calculateRSI(self):
+        data_minute_close = self.data_minute.close
+        data_daily_close = self.data_daily.close
 
-        # Resample to get the opening price at 00:00 for each day
-        daily_opens = df['open'].resample('D').first().dropna()
+        # Ensure there are enough data points for the RSI calculation
+        if len(data_daily_close) >= self.params.rsi_period:
+            # Collect the last few closing prices for RSI calculation
+            closes = data_daily_close.get(size=self.params.rsi_period)
+            closes.append(data_minute_close[0])  # Add the current close of minute data
+            prices = pd.Series(closes)
 
-        # Ensure there are enough days to calculate RSI
-        if len(daily_opens) < n - 1:
-            return np.nan  # Not enough data to calculate RSI
-
-        # Combine the last N-1 days' opens with the latest close price
-        relevant_prices = pd.concat(
-            [daily_opens.tail(n - 1), pd.Series(df['close'].iloc[-1], index=[df.index[-1]])]
-        )
-
-        # Calculate RSI using the ta library
-        rsi_series = ta.wrapper.RSIIndicator(relevant_prices, window=n).rsi()
-        return rsi_series.iloc[-1]
+            # Calculate RSI using the `ta` library
+            rsi = ta.momentum.RSIIndicator(prices, window=self.params.rsi_period).rsi().iloc[-1]
+            return rsi
+        return None
 
     def next(self):
-        # Calculate RSI value
-        rsi_value = self.calculate_rsi_n_days(self.data, self.params.rsi_period)
-
-        # Check if RSI value is valid
-        if np.isnan(rsi_value):
-            return  # Not enough data to proceed
+        # Calculate RSI
+        rsi_value = self.__calculateRSI()
+        if rsi_value is None:
+            return
 
         # Buy condition: RSI > threshold
         if rsi_value > self.params.rsi_threshold and not self.position:
-            size = int(self.broker.getcash() / self.data.close[0])
+            size = int(self.broker.getcash() / self.data_minute.close[0])
             if size > 0:
-                self.order = self.buy(size=size)
+                self.order = self.buy(data=self.data_minute, size=size)
 
         # Sell condition: RSI < threshold
         elif rsi_value < self.params.rsi_threshold and self.position:
-            self.order = self.sell(size=self.position.size)
-
-
-
+            self.order = self.sell(data=self.data_minute, size=self.position.size)
 
 
 def main():
@@ -127,10 +131,9 @@ def main():
     interval = "1m"
     market = "spot"
     exchange = "binance"
-    start_time = datetime(2024, 9, 1, 0, 0, 0, tzinfo=timezone.utc)
+    start_time = datetime(2024, 10, 1, 0, 0, 0, tzinfo=timezone.utc)
 
-
-    assetToData: Dict[str, bt.feeds.PandasData] = {}
+    assetToData: Dict[str, pd.DataFrame] = {}
     for asset in assets:
         ohlc_request = OhlcRequest(
             asset=asset,
@@ -161,31 +164,22 @@ def main():
             data_df = data_df.dropna(subset=['datetime'])
 
         # 3. Set 'datetime' as the index
-        data_df.set_index('datetime', inplace=True)
+        # data_df.set_index('datetime', inplace=True)
 
         # Ensure data_df is sorted by datetime
-        data_df.sort_index(inplace=True)
+        # data_df.sort_index(inplace=True)
 
-        data_feed = bt.feeds.PandasData(dataname=data_df)
-
-        assetToData[asset] = data_feed
+        assetToData[asset] = data_df
 
         # Ensure the directory exists
         output_dir = './files'
         os.makedirs(output_dir, exist_ok=True)
-
         now = datetime.now()
-
-        # Save the DataFrame to CSV
         data_df.to_csv(os.path.join(output_dir, f'{now}.csv'), sep=" ")
+
         # Prepare data feed for Cerebro
-
-
-
-    run_backtest(assetToData, RsiStrategy)
-    run_backtest(assetToData, BuyAndHold)
-
-
+        run_backtest(asset, data_df, RsiStrategy)
+        # run_backtest(asset, data_df, BuyAndHold)
 
 
 if __name__ == "__main__":

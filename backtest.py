@@ -1,15 +1,37 @@
 from typing import Dict
-import backtrader as bt
 
-def run_backtest(datas: Dict[str, bt.feeds.PandasData], strategy_class):
+import backtrader as bt
+import backtrader.feeds
+import pandas as pd
+
+
+def run_backtest(asset: str, data: pd.DataFrame, strategy_class):
     cerebro = bt.Cerebro()
     cerebro.addstrategy(strategy_class)
 
-    for key, data in datas.items():
-        cerebro.adddata(data, name=key)
+    data['datetime'] = pd.to_datetime(data['datetime'])
+    data.set_index('datetime', inplace=True)
+
+    data_feed = bt.feeds.PandasData(
+        dataname=data,
+    )
+    cerebro.adddata(data_feed, name="minute_tf")
+
+    data_df_resampled = data.resample('D').agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'
+    })
+    resampled_feed = bt.feeds.PandasData(
+        dataname=data_df_resampled,
+    )
+    cerebro.adddata(data_feed, name="daily_tf")
+
 
     # Set initial cash
-    initial_cash = 10000  # Set consistent initial cash
+    initial_cash = 1000  # Set consistent initial cash
     cerebro.broker.set_cash(initial_cash)
 
     # Add analyzers with names for easy access
@@ -21,9 +43,9 @@ def run_backtest(datas: Dict[str, bt.feeds.PandasData], strategy_class):
     # Run the backtest
     results = cerebro.run()
     strat = results[0]
-
-    # Retrieve analyzers' results
-    sharpe_ratio = strat.analyzers.sharperatio.get_analysis()
+    #
+    # # Retrieve analyzers' results
+    # sharpe_ratio = strat.analyzers.sharperatio.get_analysis()
     drawdown = strat.analyzers.drawdown.get_analysis()
     returns = strat.analyzers.returns.get_analysis()
     trade_analysis = strat.analyzers.tradeanalyzer.get_analysis()
