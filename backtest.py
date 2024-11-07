@@ -56,16 +56,14 @@ def run_backtest(asset: str, data: pd.DataFrame, strategy_class):
     # Extract net profit
     total_pnl = trade_analysis.pnl.net.total if 'pnl' in trade_analysis and 'net' in trade_analysis.pnl and 'total' in trade_analysis.pnl.net else 0
 
-    # Safely get Sharpe Ratio and Total Return
-    total_return = returns.get('rtot', 0)
-
     # Display results for the strategy
     print(f'===============================\nResults for {strategy_class.__name__}:\n-------------------------------')
     print(f'Starting Value: ${initial_cash:.2f}')
     print(f'Ending Value: ${cerebro.broker.getvalue():.2f}')
     print(f'Total Trades: {total_trades}')
     print(f'Total Profit: ${cerebro.broker.getvalue() - initial_cash:.2f}')
+    print(f'Net profit: ${total_pnl:.2f}')
     print(f'Max Drawdown: {drawdown["max"]["drawdown"]:.2f}%')
     print(f'Max Drawdown Duration: {drawdown["max"]["len"]} bars')
-    print(f'Total Return: {total_return:.2%}')
+
     print('===============================')

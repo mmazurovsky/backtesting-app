@@ -80,6 +80,9 @@ class RsiStrategy(bt.Strategy):
     params = (
         ('rsi_threshold', 70),
         ('rsi_period', 5),
+        ('use_stop_loss', False),
+        ('stop_loss', 0.015),
+        ('trail', True),
     )
 
     def __init__(self):
@@ -87,6 +90,7 @@ class RsiStrategy(bt.Strategy):
         # Access data feeds by name
         self.data_minute = self.getdatabyname("minute_tf")
         self.data_daily = self.getdatabyname("daily_tf")
+        self.stop_orders = []
 
     def __calculateRSI(self):
         data_minute_close = self.data_minute.close
@@ -111,15 +115,49 @@ class RsiStrategy(bt.Strategy):
         if rsi_value is None:
             return
 
+        available_cash = self.broker.getcash()
         # Buy condition: RSI > threshold
-        if rsi_value > self.params.rsi_threshold and not self.position:
-            size = int(self.broker.getcash() / self.data_minute.close[0])
+        if rsi_value > self.params.rsi_threshold and self.position.size == 0:
+
+            latest_price = self.data_minute.close[0]
+            size = int(available_cash / latest_price)
             if size > 0:
                 self.order = self.buy(data=self.data_minute, size=size)
 
         # Sell condition: RSI < threshold
-        elif rsi_value < self.params.rsi_threshold and self.position:
-            self.order = self.sell(data=self.data_minute, size=self.position.size)
+        elif rsi_value < self.params.rsi_threshold and self.position.size > 0:
+            position_size = self.position.size
+            self.order = self.sell(data=self.data_minute, size=position_size)
+
+    def notify_order(self, order):
+        # Check if the order is completed (filled)
+        if order.status == order.Completed:
+            if order.isbuy():
+                print('BUY @price: {:.5f}'.format(order.executed.price))
+                # Place a stop loss order if it was a buy order
+                if self.p.use_stop_loss is True:
+                    if not self.p.trail:
+                        stop_price = order.executed.price * (1.0 - self.p.stop_loss)
+                        order = self.sell(exectype=bt.Order.Stop, price=stop_price, size=self.position.size)
+                    else:
+                        self.sell(exectype=bt.Order.StopTrail, trailamount=self.p.trail, size=self.position.size)
+                    self.stop_orders.append(order)
+
+            elif order.issell():
+                if order.exectype in [bt.Order.Stop, bt.Order.StopTrail, bt.Order.StopTrailLimit, bt.Order.StopLimit]:
+                    print('Stop-loss SELL order executed @price: {:.5f}'.format(order.executed.price))
+                    self.cancel_all_stop_orders()
+                else:
+                    print('SELL order {} executed @price: {:.5f}'.format(order.exectype, order.executed.price))
+                    self.cancel_all_stop_orders()
+
+    def cancel_all_stop_orders(self):
+        # Cancel all stored stop-loss orders
+        for order in self.stop_orders:
+            if order.alive():  # Check if the order is still active
+                self.cancel(order)
+        # Clear the list after cancelling
+        self.stop_orders = []
 
 
 def main():
