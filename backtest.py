@@ -1,34 +1,17 @@
-from typing import Dict
+from typing import Dict, List
 
 import backtrader as bt
 import backtrader.feeds
 import pandas as pd
 
+from data import AssetAndIntervalData
 
-def run_backtest(asset: str, data: pd.DataFrame, strategy_class):
+
+def run_multiasset_backtest(asset_data: List[AssetAndIntervalData], strategy_class):
     cerebro = bt.Cerebro()
     cerebro.addstrategy(strategy_class)
-
-    data['datetime'] = pd.to_datetime(data['datetime'])
-    data.set_index('datetime', inplace=True)
-
-    data_feed = bt.feeds.PandasData(
-        dataname=data,
-    )
-    cerebro.adddata(data_feed, name="minute_tf")
-
-    data_df_resampled = data.resample('D').agg({
-        'open': 'first',
-        'high': 'max',
-        'low': 'min',
-        'close': 'last',
-        'volume': 'sum'
-    })
-    resampled_feed = bt.feeds.PandasData(
-        dataname=data_df_resampled,
-    )
-    cerebro.adddata(resampled_feed, name="daily_tf")
-
+    for data in asset_data:
+        cerebro.adddata(data.intervalToData.get("1d"), name = f"{data.asset}_1d")
 
     # Set initial cash
     initial_cash = 1000  # Set consistent initial cash

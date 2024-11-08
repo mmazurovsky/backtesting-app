@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
+import backtrader as bt
 
 
 @dataclass
@@ -23,7 +24,7 @@ class OhlcEntity:
 
 class OhlcRequest:
     def __init__(self, asset: str, quote: str, interval: str, market: str, exchange: str,
-                 start_time: datetime, end_time: Optional[datetime] = None,):
+                 start_time: datetime, end_time: Optional[datetime] = None, ):
         self.asset = asset
         self.quote = quote
         self.interval = interval
@@ -35,3 +36,9 @@ class OhlcRequest:
     @property
     def ticker(self):
         return f"{self.asset}{self.quote}"
+
+
+@dataclass
+class AssetAndIntervalData:
+    asset: str
+    intervalToData: Dict[str, bt.feeds.PandasData]
