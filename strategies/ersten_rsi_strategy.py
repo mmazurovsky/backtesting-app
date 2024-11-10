@@ -64,7 +64,8 @@ class ErstenRsiStrategy(bt.Strategy):
         # Check if the order is completed (filled)
         if order.status == order.Completed:
             if order.isbuy():
-                print(f'BUY {asset} at price: {order.executed.price:.5f}')
+                datetime = self.data.num2date(order.executed.dt)
+                print(f'BUY {asset} at price: {order.executed.price:.5f} at {datetime}')
                 # Place a stop loss order if it was a buy order
                 if self.p.use_stop_loss is True:
                     if not self.p.trail:
@@ -82,11 +83,12 @@ class ErstenRsiStrategy(bt.Strategy):
                             self.opened_stop_orders[asset] = [new_sl_order]
 
             elif order.issell():
+                datetime = self.data.num2date(order.executed.dt)
                 if order.exectype in [bt.Order.Stop, bt.Order.StopTrail, bt.Order.StopTrailLimit, bt.Order.StopLimit]:
-                    print(f'Stop-loss SELL {asset} at price: {order.executed.price:.5f}')
+                    print(f'Stop-loss SELL {asset} at price: {order.executed.price:.5f} at {datetime}')
                     self.cancel_all_stop_orders(asset)
                 else:
-                    print(f'SELL {asset} at price: {order.executed.price:.5f}')
+                    print(f'SELL {asset} at price: {order.executed.price:.5f} at {datetime}')
                     self.cancel_all_stop_orders(asset)
 
     def cancel_all_stop_orders(self, asset):
