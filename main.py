@@ -4,12 +4,12 @@ import backtrader as bt
 import pandas as pd
 import numpy as np
 from typing import List, Dict
+
+from assets import assets_to_trade
 from backtest import run_multiasset_backtest
 from data import OhlcRequest, AssetAndIntervalData
 from repo import MongoConnector
 from strategies.ersten_rsi_strategy import ErstenRsiStrategy
-
-assets_to_trade = ["ape"]
 
 def main():
     # Initialize Cerebro engine
@@ -60,12 +60,7 @@ def main():
         data_df['datetime'] = pd.to_datetime(data_df['datetime'])
         data_df.set_index('datetime', inplace=True)
 
-        data_feed = bt.feeds.PandasData(
-            dataname=data_df,
-            symbol = asset
-        )
-
-        data_df_resampled = data_feed.resample('D').agg({
+        data_df_resampled = data_df.resample('D').agg({
             'open': 'first',
             'high': 'max',
             'low': 'min',
@@ -73,7 +68,12 @@ def main():
             'volume': 'sum'
         })
 
-        asset_to_data.append(AssetAndIntervalData(asset=asset, intervalToData={"1d": data_df_resampled}))
+        data_feed = bt.feeds.PandasData(
+            dataname=data_df_resampled,
+            name = asset
+        )
+
+        asset_to_data.append(AssetAndIntervalData(asset=asset, intervalToData={"1d": data_feed}))
 
         # Ensure the directory exists
         output_dir = './files'
