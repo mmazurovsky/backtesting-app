@@ -3,47 +3,30 @@ import pandas as pd
 import ta
 
 from assets import assets_to_trade
+from strategies.functions import calculateRSI, calculateSMA
 
 
 class ErstenRsiStrategy(bt.Strategy):
     params = (
         ('rsi_threshold', 70),
-        ('rsi_period', 5),
+        ('rsi_period', 3),
         ('use_stop_loss', True),
-        ('stop_loss', 0.015),
+        ('stop_loss', 0.02),
         ('trail', True),
     )
 
     def __init__(self):
         self.opened_stop_orders: dict = {}
 
-    def calculateRSI(self, data: bt.feeds.PandasData):
-        closes = data.close
-
-        # Ensure there are enough data points for the RSI calculation
-        if len(closes) >= self.params.rsi_period:
-            # Collect the last few closing prices for RSI calculation
-            closes = closes.get(size=self.params.rsi_period)
-            # closes.append(data_minute_close[0])  # Add the current close of minute data
-            prices = pd.Series(closes)
-
-            # Calculate RSI using the `ta` library
-
-            rsi = ta.momentum.RSIIndicator(prices, window=self.params.rsi_period).rsi().iloc[-1]
-
-            return rsi
-        return None
-
     def next(self):
         assets_with_positions = self.opened_stop_orders.copy()
         available_cash = self.broker.getcash()
-
 
         for asset in assets_with_positions:
             opened_stop_orders_for_asset = self.opened_stop_orders[asset]
             if opened_stop_orders_for_asset is not None and len(opened_stop_orders_for_asset) > 0:
                 asset_data = self.getdatabyname(f"{asset}")
-                rsi = self.calculateRSI(asset_data)
+                rsi = calculateRSI(asset_data, self.params.rsi_period)
                 if (rsi < self.params.rsi_threshold):
                     position = self.getposition(data=asset_data).size
                     self.sell(data=asset_data, size=position)
@@ -53,12 +36,14 @@ class ErstenRsiStrategy(bt.Strategy):
             if (f"{asset}_1d" in assets_with_positions):
                 return
             if (available_cash > 10):
-                asset_closes = self.getdatabyname(f"{asset}_1d")
-                rsi = self.calculateRSI(asset_closes)
-                if rsi is not None and rsi > self.params.rsi_threshold:
-                    latest_price = asset_closes[0]
+                asset_ohlcs = self.getdatabyname(f"{asset}_1d")
+                rsi = calculateRSI(asset_ohlcs, self.params.rsi_period)
+                price = asset_ohlcs.close[0]
+                sma50 = calculateSMA(asset_ohlcs, 20)
+                if rsi is not None and rsi > self.params.rsi_threshold and sma50 is not None and price > sma50:
+                    latest_price = asset_ohlcs[0]
                     size = available_cash / latest_price / 3
-                    self.buy(data=asset_closes, size=size)
+                    self.buy(data=asset_ohlcs, size=size)
 
     def notify_order(self, order):
         asset = order.data._name
@@ -99,3 +84,4 @@ class ErstenRsiStrategy(bt.Strategy):
                 if stop_order.alive():  # Check if the order is still active
                     self.cancel(stop_order)
             del self.opened_stop_orders[asset]
+
