@@ -28,9 +28,10 @@ class ErstenRsiStrategy(bt.Strategy):
             prices = pd.Series(closes)
 
             # Calculate RSI using the `ta` library
-            rsi = ta.momentum.RSIIndicator(prices, window=self.params.rsi_period).rsi()
 
-            return rsi.iloc[-1]
+            rsi = ta.momentum.RSIIndicator(prices, window=self.params.rsi_period).rsi().iloc[-1]
+
+            return rsi
         return None
 
     def next(self):
