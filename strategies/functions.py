@@ -24,10 +24,11 @@ def calculateSMA(data: bt.feeds.PandasData, sma_period: int):
 
     # Ensure there are enough data points for the SMA calculation
     if len(closes) >= sma_period:
-        # Collect the last few closing prices for SMA calculation
-        closes = closes.get(size=sma_period)
-        prices = pd.Series(closes)
-
+        # TODO: CHECK THAT
+        # Collect the closing prices from first to last
+        close_prices = [closes[i] for i in range(len(closes))]
+        close_prices.reverse()
+        prices = pd.Series(close_prices)
         # Calculate SMA using the `ta` library
         sma = ta.trend.SMAIndicator(prices, window=sma_period).sma_indicator().iloc[-1]
 

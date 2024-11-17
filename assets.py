@@ -1,2 +1,2 @@
 
-assets_to_trade = ["ape", "tao", "imx", "ray", "btc", "eth", "ltc", "sol", "dot", "ada"]
+assets_to_trade = ["btc", "neo", "ltc", "snt", "eos", "bnt", "bnb", "eth", "gas"]
