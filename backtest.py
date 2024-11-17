@@ -9,6 +9,8 @@ from data import AssetAndIntervalData
 
 def run_multiasset_backtest(asset_data: List[AssetAndIntervalData], interval: str, strategy_class):
     cerebro = bt.Cerebro()
+    cerebro.broker.set_coc(True)
+
     cerebro.addstrategy(strategy_class)
     for data in asset_data:
         cerebro.adddata(data.intervalToData.get(interval), name=data.asset)

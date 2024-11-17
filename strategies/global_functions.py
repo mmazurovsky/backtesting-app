@@ -1,5 +1,6 @@
 import backtrader as bt
 
+
 def _cancel_all_orders(strategy: bt.Strategy, asset):
     if asset in strategy.opened_stop_orders:
         opened_stop_orders_for_asset = strategy.opened_stop_orders[asset]
@@ -14,9 +15,9 @@ def notify_order(strategy: bt.Strategy, order):
     asset = order.data._name
     datetime = strategy.data.num2date(order.executed.dt)
     # Check if the order is completed (filled)
-    if order.status in [order.Canceled, order.Expired, order.Rejected]:
-        print(f"Not executed order for {asset} at {datetime}")
-    if order.status == order.Completed:
+    if order.status in [order.Partial, order.Canceled, order.Expired, order.Margin, order.Rejected]:
+        print(f"Weird order {order.status} for {asset} at {datetime}")
+    elif order.status == order.Completed:
         if order.isbuy():
             print(f'BUY {asset} at price: {order.executed.price:.5f} at {datetime}')
             strategy.opened_long_orders.setdefault(asset, []).append(order)
@@ -28,7 +29,6 @@ def notify_order(strategy: bt.Strategy, order):
                     print(asset)
                 else:
                     strategy.opened_stop_orders.setdefault(asset, []).append(new_sl_order)
-
         elif order.issell():
             _cancel_all_orders(strategy, asset)
             if order.exectype in [bt.Order.Stop, bt.Order.StopTrail, bt.Order.StopTrailLimit, bt.Order.StopLimit]:

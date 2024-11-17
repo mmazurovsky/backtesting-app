@@ -20,17 +20,18 @@ def calculateRSI(data: bt.feeds.PandasData, rsi_period: int):
     return None
 
 def calculateSMA(data: bt.feeds.PandasData, sma_period: int):
-    closes = data.close
+    if len(data.close) >= sma_period:
+        # Extract the close prices from the data feed
+        close_prices = list(data.close.get(size=len(data.close)))
 
-    # Ensure there are enough data points for the SMA calculation
-    if len(closes) >= sma_period:
-        # TODO: CHECK THAT
-        # Collect the closing prices from first to last
-        close_prices = [closes[i] for i in range(len(closes))]
-        close_prices.reverse()
+        # Create a pandas Series from the list of close prices
         prices = pd.Series(close_prices)
-        # Calculate SMA using the `ta` library
-        sma = ta.trend.SMAIndicator(prices, window=sma_period).sma_indicator().iloc[-1]
 
-        return sma
-    return None
+        # Now you can calculate the SMA using pandas
+        sma = prices.rolling(window=sma_period).mean()
+
+        # Return the latest SMA value
+        return sma.iloc[-1]
+    else:
+        # Not enough data points to calculate SMA
+        return None
